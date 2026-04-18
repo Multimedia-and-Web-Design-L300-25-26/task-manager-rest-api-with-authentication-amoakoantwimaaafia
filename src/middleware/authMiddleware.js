@@ -1,7 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
-
 // 1. Extract token from Authorization header
 // 2. Verify token
 // 3. Find user
@@ -10,7 +9,56 @@ import User from "../models/User.js";
 // 6. If invalid → return 401
 
 const authMiddleware = async (req, res, next) => {
-  //  implement here
+  try {
+    // 1. Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ 
+        message: "Authentication required. Please provide a valid token." 
+      });
+    }
+
+    // Get token from "Bearer <token>"
+    const token = authHeader.split(" ")[1];
+
+    // 2. Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // 3. Find user (exclude password)
+    const user = await User.findById(decoded.id).select("-password");
+
+    if (!user) {
+      return res.status(401).json({ 
+        message: "User not found or token is invalid." 
+      });
+    }
+
+    // 4. Attach user to req.user
+    req.user = user;
+
+    // 5. Call next()
+    next();
+
+  } catch (error) {
+    // 6. If invalid → return 401
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({ 
+        message: "Invalid token. Please log in again." 
+      });
+    }
+    
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({ 
+        message: "Token expired. Please log in again." 
+      });
+    }
+
+    // For any other errors
+    return res.status(401).json({ 
+      message: "Authentication failed. Please try again." 
+    });
+  }
 };
 
 export default authMiddleware;
